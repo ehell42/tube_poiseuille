@@ -43,10 +43,10 @@ RM = /usr/bin/cmake -E remove -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/ehell/pfem2/tube_Poiseuille
+CMAKE_SOURCE_DIR = /home/ehell/tube_poiseuille/tube_Poiseuille
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/ehell/pfem2/tube_Poiseuille
+CMAKE_BINARY_DIR = /home/ehell/tube_poiseuille/tube_Poiseuille
 
 # Utility rule file for distclean.
 
@@ -54,9 +54,9 @@ CMAKE_BINARY_DIR = /home/ehell/pfem2/tube_Poiseuille
 include CMakeFiles/distclean.dir/progress.make
 
 CMakeFiles/distclean:
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/ehell/pfem2/tube_Poiseuille/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "distclean invoked"
-	/usr/bin/cmake --build /home/ehell/pfem2/tube_Poiseuille --target clean
-	/usr/bin/cmake --build /home/ehell/pfem2/tube_Poiseuille --target runclean
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/ehell/tube_poiseuille/tube_Poiseuille/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "distclean invoked"
+	/usr/bin/cmake --build /home/ehell/tube_poiseuille/tube_Poiseuille --target clean
+	/usr/bin/cmake --build /home/ehell/tube_poiseuille/tube_Poiseuille --target runclean
 	/usr/bin/cmake -E remove_directory CMakeFiles
 	/usr/bin/cmake -E remove CMakeCache.txt cmake_install.cmake Makefile build.ninja rules.ninja .ninja_deps .ninja_log
 
@@ -75,6 +75,6 @@ CMakeFiles/distclean.dir/clean:
 .PHONY : CMakeFiles/distclean.dir/clean
 
 CMakeFiles/distclean.dir/depend:
-	cd /home/ehell/pfem2/tube_Poiseuille && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/ehell/pfem2/tube_Poiseuille /home/ehell/pfem2/tube_Poiseuille /home/ehell/pfem2/tube_Poiseuille /home/ehell/pfem2/tube_Poiseuille /home/ehell/pfem2/tube_Poiseuille/CMakeFiles/distclean.dir/DependInfo.cmake --color=$(COLOR)
+	cd /home/ehell/tube_poiseuille/tube_Poiseuille && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /home/ehell/tube_poiseuille/tube_Poiseuille /home/ehell/tube_poiseuille/tube_Poiseuille /home/ehell/tube_poiseuille/tube_Poiseuille /home/ehell/tube_poiseuille/tube_Poiseuille /home/ehell/tube_poiseuille/tube_Poiseuille/CMakeFiles/distclean.dir/DependInfo.cmake --color=$(COLOR)
 .PHONY : CMakeFiles/distclean.dir/depend
 

@@ -1,0 +1,10 @@
+/home/ehell/pfem2/tube_Poiseuille/CMakeFiles/rebuild_cache.dir
+/home/ehell/pfem2/tube_Poiseuille/CMakeFiles/edit_cache.dir
+/home/ehell/pfem2/tube_Poiseuille/CMakeFiles/info.dir
+/home/ehell/pfem2/tube_Poiseuille/CMakeFiles/strip_comments.dir
+/home/ehell/pfem2/tube_Poiseuille/CMakeFiles/run.dir
+/home/ehell/pfem2/tube_Poiseuille/CMakeFiles/tube.dir
+/home/ehell/pfem2/tube_Poiseuille/CMakeFiles/debug.dir
+/home/ehell/pfem2/tube_Poiseuille/CMakeFiles/release.dir
+/home/ehell/pfem2/tube_Poiseuille/CMakeFiles/runclean.dir
+/home/ehell/pfem2/tube_Poiseuille/CMakeFiles/distclean.dir

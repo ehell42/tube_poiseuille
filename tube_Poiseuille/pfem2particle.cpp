@@ -489,14 +489,13 @@ void pfem2Solver::seed_particles_into_cell (const typename DoFHandler<2>::cell_i
 	double hx = 1.0/quantities[0];	//"шаг" по х между частицами
 	double hy = 1.0/quantities[1];	//"шаг" по у между частицами
 	
-	FESystem<2> fe(FE_Q<2>(1), 1);	//??????????????????????
+	FESystem<2> fe(FE_Q<2>(1), 1);
 	double shapeValue;	//функция формы
 	
 	for(unsigned int i = 0; i < quantities[0]; ++i){	//цикл по количеству частиц по х
 		for(unsigned int j = 0; j < quantities[1]; ++j){	//цикл по количеству частиц по у
 		//вводим новую частицу и размещаем её в точке ([пред. частица] + 0,5) * ["шаг" между частицами]
 			pfem2Particle* particle = new pfem2Particle(mapping.transform_unit_to_real_cell(cell, Point<2>((i + 1.0/2)*hx, (j+1.0/2)*hy)), Point<2>((i + 1.0/2)*hx, (j+1.0/2)*hy), ++particleCount);
-			//particleCount что и откуда берется??????????????????????????????????????
 			particle_handler.insert_particle(particle, cell);	//"поставили" частицу
 			
 
@@ -617,7 +616,7 @@ void pfem2Solver::correct_particles_velocities()
 			}//vertex
 		}//particle
 	}//cell
-	
+
 	//std::cout << "Finished correcting particles' velocities" << std::endl;	
 }
 

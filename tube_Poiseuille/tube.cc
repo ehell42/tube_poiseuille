@@ -36,6 +36,12 @@
 
 using namespace dealii;
 
+struct velocities
+{
+	double	Vx;
+	double	Vy;
+};
+
 class parabolicBC : public Function<2>
 {
 public:
@@ -133,72 +139,47 @@ void tube::setup_system()
     DynamicSparsityPattern dspVx(dof_handlerVx.n_dofs());
     DoFTools::make_sparsity_pattern (dof_handlerVx, dspVx);
     sparsity_patternVx.copy_from(dspVx);
-    
+
     system_mVx.reinit (sparsity_patternVx);
-   
+
     solutionVx.reinit (dof_handlerVx.n_dofs());
     predictionVx.reinit (dof_handlerVx.n_dofs());
     correctionVx.reinit (dof_handlerVx.n_dofs());
     old_solutionVx.reinit (dof_handlerVx.n_dofs());
     system_rVx.reinit (dof_handlerVx.n_dofs());
-    
+
     //Vy
     DynamicSparsityPattern dspVy(dof_handlerVy.n_dofs());
     DoFTools::make_sparsity_pattern (dof_handlerVy, dspVy);
     sparsity_patternVy.copy_from(dspVy);
-    
+
     system_mVy.reinit (sparsity_patternVy);
-    
+
     solutionVy.reinit (dof_handlerVy.n_dofs());
     predictionVy.reinit (dof_handlerVy.n_dofs());
     correctionVy.reinit (dof_handlerVy.n_dofs());
     old_solutionVy.reinit (dof_handlerVy.n_dofs());
     system_rVy.reinit (dof_handlerVy.n_dofs());
-    
+
     //P
     DynamicSparsityPattern dspP(dof_handlerP.n_dofs());
     DoFTools::make_sparsity_pattern (dof_handlerP, dspP);
     sparsity_patternP.copy_from(dspP);
-    
+
     system_mP.reinit (sparsity_patternP);
-    
+
     solutionP.reinit (dof_handlerP.n_dofs());
     old_solutionP.reinit (dof_handlerP.n_dofs());
     system_rP.reinit (dof_handlerP.n_dofs());
 
-	//запись степеней свободы и у-координат при х == 5
-	DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();	//итератор, ходит по активным(?!) ячейкам
+	/*запись степеней свободы и у-координат при х == 5*/
+	DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();	//итератор, ходит по активным ячейкам
 	for (; cell != endc; ++cell) {
 		for (unsigned int i=0; i<4; ++i) {	//смотрит вершины в ячейке
 			if ((cell->vertex(i)[0] - 5.0) < 1.e-7)	//если хi-й вершины == 5
 				needStepDoFs.emplace(cell->vertex_dof_index(i, 0), cell->vertex(i)[1]);	//записывает степень свободы и у-координату
 		}
 	}
-//	for (auto x : needStepDoFs)
-//		std::cout << x.first << '\t' << x.second << std::endl; 
-
-/*
- *std::unordered_map<unsigned int, double> openSeaDoFs;	//степень свободы и у (тк х уже знаем)
- *
- *DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();
- *   
- *    for (; cell != endc; ++cell) {
- *        for (unsigned int i=0; i<4; ++i) {
- *            solutionP(cell->vertex_dof_index(i,0))=100000.0-1000.0*9.81*(cell->vertex(i)[1]); //  было (15.0 - cell->vertex(i)[1]);
- *       } 
- *       for (unsigned int face_number = 0; face_number<GeometryInfo<2>::faces_per_cell; ++face_number){
- *            if(cell->face(face_number)->at_boundary() && cell->face(face_number)->boundary_id() == 0){
- *                for (unsigned int vert=0; vert<GeometryInfo<2>::vertices_per_face; ++vert){
- *                    solutionSal(cell->face(face_number)->vertex_dof_index(vert,0)) = 0.0;
- *                    boundaryDoFNumbers.insert(cell->face(face_number)->vertex_dof_index(vert,0));
- *                }
- *            } else if(cell->face(face_number)->at_boundary() && cell->face(face_number)->boundary_id() == 2){
- *                for (unsigned int vert=0; vert<GeometryInfo<2>::vertices_per_face; ++vert)
- *                    openSeaDoFs.emplace(cell->face(face_number)->vertex_dof_index(vert,0), cell->face(face_number)->vertex(vert)[1]);
- *        }
- *     }
- *  }
- */
 }
 
 void tube::assemble_system()
@@ -635,20 +616,20 @@ void tube::output_results(bool predictionCorrection)
     data_out.add_data_vector (solutionVx, "Vx");
     data_out.add_data_vector (solutionVy, "Vy");
     data_out.add_data_vector (solutionP, "P");
-    
+
     if(predictionCorrection){
         data_out.add_data_vector (predictionVx, "predVx");
         data_out.add_data_vector (predictionVy, "predVy");
         data_out.add_data_vector (correctionVx, "corVx");
         data_out.add_data_vector (correctionVy, "corVy");
     }
-    
+
     data_out.build_patches ();
-    
+
     const std::string filename =  "solution-" + Utilities::int_to_string (timestep_number, 2) +    ".vtk";
     std::ofstream output (filename.c_str());
     data_out.write_vtk (output);
-    
+
     //вывод частиц
     const std::string filename2 =  "particles-" + Utilities::int_to_string (timestep_number, 2) + ".vtk";
     std::ofstream output2 (filename2.c_str());
@@ -705,6 +686,10 @@ void tube::run()
 	solutionVx=0.0;
 	solutionVy=0.0;
 	solutionP=0.0;
+
+	double	EPS = 1.e-2;
+	std::unordered_map<unsigned int, velocities> lastVelosity;//контейнер для скоростей на предыдущей итерации
+	std::unordered_map<unsigned int, velocities> nowVelosity;//контейнер для скоростей на текущей итерации
 	
 	//удаление старых файлов VTK (специфическая команда Linux!!!)
 	system("rm solution-*.vtk");
@@ -712,14 +697,81 @@ void tube::run()
 
 	std::ofstream os("force.csv");
 
+	/*записываем скорости, соответствующие нужным степеням свободы, на начальном временном слое*/
+	DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();
+	for (; cell != endc; ++cell) {
+		for (unsigned int i = 0; i < 4; ++i) {	//смотрит вершины в ячейке
+			for(auto needDots : needStepDoFs) {
+				if (needDots.first == cell->vertex_dof_index(i,0))	//проверяет совпадение степени свободы
+					lastVelosity.emplace(needDots.first,  cell->vertex(i)[1]);	//записывает степень свободы и скорости на этой степени свободы
+			}
+		}
+	}
+
 	for (; time<=15; time+=time_step, ++timestep_number) {
 		std::cout << std::endl << "Time step " << timestep_number << " at t=" << time << std::endl;
 		
 		correct_particles_velocities();
 		move_particles();
 		distribute_particle_velocities_to_grid();
-		
+
 		assemble_system();
+
+		/*записываем скорости, соответствующие нужным степеням свободы, на текущем временном слое*/
+		DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();
+		for (; cell != endc; ++cell) {
+			for (unsigned int i = 0; i < 4; ++i) {	//смотрит вершины в ячейке
+				for(auto needDots : needStepDoFs) {
+					if (needDots.first == cell->vertex_dof_index(i,0))	//проверяет совпадение степени свободы
+						nowVelosity.emplace(needDots.first,  cell->vertex(i)[1]);	//записывает степень свободы и скорости на этой степени свободы
+				}
+			}
+		}
+
+		/*Проверяем на сколько отличаются скорости на соседних временных слоях*/
+		double	max = 0;
+		for(auto needDots : needStepDoFs) {
+			double	lastVx;
+			double	nowVx;
+
+			for (auto last : lastVelosity)
+				if (last.first == needDots.first)
+					lastVx == last.second;
+			
+			for (auto now : nowVelosity)
+				if (now.first == needDots.first)
+					nowVx == now.second;
+			if (fabs(lastVx - nowVx) > max)
+				max = fabs(lastVx - nowVx);
+		}
+
+		/*сравниваем скорости с истинным решением*/
+		if (max < EPS) {
+			std::ofstream fout;
+			fout.open("Error_at_x_5.txt");
+
+			for (auto needDots : needStepDoFs) {
+				double	realVelocity;
+
+				/*вычисляем истинное решение, зная координаты х и у*/
+				double	h = 4.0;
+				double	x = 5.0;
+				double	mu = 1.0;
+				realVelocity = (h * h / 4) * 10 / (4 * mu) * (1 - (x * x + (needDots.second - h / 2) * (needDots.second - h / 2)) / (h * h / 4));
+
+				/*записываем в файл координаты и разницу */
+				for (auto now : nowVelosity)
+					if (now.first == needDots.first)
+						std::fout << 5.0 << '\t' << needDots.second << '\t' << fabs(now.second - realVelocity) << std::endl; 
+			}
+			
+			fout.close;
+			std::cout << "Error was written" << std::endl;
+			break ();//как прерывать?
+		}
+
+		lastVelosity = nowVelosity;
+
 		if((timestep_number - 1) % 10 == 0) output_results();
 		
 		//calculate_loads(3, &os);

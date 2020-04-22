@@ -172,11 +172,11 @@ void tube::setup_system()
     old_solutionP.reinit (dof_handlerP.n_dofs());
     system_rP.reinit (dof_handlerP.n_dofs());
 
-	/*запись степеней свободы и у-координат при х == 5*/
+	/*запись степеней свободы и у-координат при х == 4.8*/
 	DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();	//итератор, ходит по активным ячейкам
 	for (; cell != endc; ++cell) {
 		for (unsigned int i=0; i<4; ++i) {	//смотрит вершины в ячейке
-			if ((cell->vertex(i)[0] - 5.0) < 1.e-7)	//если хi-й вершины == 5
+			if (fabs(cell->vertex(i)[0] - 4.8) < 1.e-3)	//если хi-й вершины == 4.8
 				needStepDoFs.emplace(cell->vertex_dof_index(i, 0), cell->vertex(i)[1]);	//записывает степень свободы и у-координату
 		}
 	}
@@ -687,9 +687,9 @@ void tube::run()
 	solutionVy=0.0;
 	solutionP=0.0;
 
-	double	EPS = 1.e-2;
-	std::unordered_map<unsigned int, velocities> lastVelosity;//контейнер для скоростей на предыдущей итерации
-	std::unordered_map<unsigned int, velocities> nowVelosity;//контейнер для скоростей на текущей итерации
+	double	EPS = 0.00015;
+	std::unordered_map<unsigned int, double> lastVelosity;//контейнер для скоростей на предыдущей итерации
+	std::unordered_map<unsigned int, double> nowVelosity;//контейнер для скоростей на текущей итерации
 	
 	//удаление старых файлов VTK (специфическая команда Linux!!!)
 	system("rm solution-*.vtk");
@@ -698,16 +698,10 @@ void tube::run()
 	std::ofstream os("force.csv");
 
 	/*записываем скорости, соответствующие нужным степеням свободы, на начальном временном слое*/
-	DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();
-	for (; cell != endc; ++cell) {
-		for (unsigned int i = 0; i < 4; ++i) {	//смотрит вершины в ячейке
-			for(auto needDots : needStepDoFs) {
-				if (needDots.first == cell->vertex_dof_index(i,0))	//проверяет совпадение степени свободы
-					lastVelosity.emplace(needDots.first,  cell->vertex(i)[1]);	//записывает степень свободы и скорости на этой степени свободы
-			}
-		}
-	}
+	for (auto needDots : needStepDoFs)
+		lastVelosity.emplace(needDots.first, solutionVx[needDots.first]);
 
+	nowVelosity = lastVelosity;
 	for (; time<=15; time+=time_step, ++timestep_number) {
 		std::cout << std::endl << "Time step " << timestep_number << " at t=" << time << std::endl;
 		
@@ -718,15 +712,8 @@ void tube::run()
 		assemble_system();
 
 		/*записываем скорости, соответствующие нужным степеням свободы, на текущем временном слое*/
-		DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();
-		for (; cell != endc; ++cell) {
-			for (unsigned int i = 0; i < 4; ++i) {	//смотрит вершины в ячейке
-				for(auto needDots : needStepDoFs) {
-					if (needDots.first == cell->vertex_dof_index(i,0))	//проверяет совпадение степени свободы
-						nowVelosity.emplace(needDots.first,  cell->vertex(i)[1]);	//записывает степень свободы и скорости на этой степени свободы
-				}
-			}
-		}
+		for (auto needDots : needStepDoFs)
+			nowVelosity[needDots.first] = solutionVx[needDots.first];
 
 		/*Проверяем на сколько отличаются скорости на соседних временных слоях*/
 		double	max = 0;
@@ -736,11 +723,12 @@ void tube::run()
 
 			for (auto last : lastVelosity)
 				if (last.first == needDots.first)
-					lastVx == last.second;
+					lastVx = last.second;
 			
 			for (auto now : nowVelosity)
 				if (now.first == needDots.first)
-					nowVx == now.second;
+					nowVx = now.second;
+
 			if (fabs(lastVx - nowVx) > max)
 				max = fabs(lastVx - nowVx);
 		}
@@ -748,26 +736,30 @@ void tube::run()
 		/*сравниваем скорости с истинным решением*/
 		if (max < EPS) {
 			std::ofstream fout;
+			double	max_error = 0;
 			fout.open("Error_at_x_5.txt");
 
 			for (auto needDots : needStepDoFs) {
 				double	realVelocity;
 
 				/*вычисляем истинное решение, зная координаты х и у*/
-				double	h = 4.0;
-				double	x = 5.0;
+				double	a = 2.0;
 				double	mu = 1.0;
-				realVelocity = (h * h / 4) * 10 / (4 * mu) * (1 - (x * x + (needDots.second - h / 2) * (needDots.second - h / 2)) / (h * h / 4));
+				realVelocity = 10.0 / (4 * mu) * (a * a - sqrt(needDots.second * needDots.second));
+
+				std::cout << "real velocity (I think) = " << realVelocity << std::endl;
+
+				std::cout << "founded velocity = " << nowVelosity[needDots.first] << std::endl;
 
 				/*записываем в файл координаты и разницу */
-				for (auto now : nowVelosity)
-					if (now.first == needDots.first)
-						std::fout << 5.0 << '\t' << needDots.second << '\t' << fabs(now.second - realVelocity) << std::endl; 
+				if (max_error < fabs(nowVelosity[needDots.first] - realVelocity))
+					max_error = fabs(nowVelosity[needDots.first] - realVelocity);
+				fout << 4.8 << '\t' << needDots.second << '\t' << fabs(nowVelosity[needDots.first] - realVelocity) << std::endl; 
 			}
 			
-			fout.close;
-			std::cout << "Error was written" << std::endl;
-			break ();//как прерывать?
+			fout.close();
+			std::cout << "Error was written. Max error is " << max_error << std::endl;
+			break ;
 		}
 
 		lastVelosity = nowVelosity;

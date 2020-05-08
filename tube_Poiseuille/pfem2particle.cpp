@@ -708,7 +708,8 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	node_velocityY.reinit (tria.n_vertices(), 0.0);
 	node_weights.reinit (tria.n_vertices(), 0.0);
 
-
+	std::ofstream fout;
+	fout.open("distance.txt");
 
 	typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
 	for (; cell != endc; ++cell) {	//цикл по ячейкам
@@ -718,20 +719,24 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 			for (auto particleIndex = particle_handler.particles_in_cell_begin(cell); 
 	                                   particleIndex != particle_handler.particles_in_cell_end(cell); ++particleIndex ){	//цикл по частицам
 										   
-				shapeValue = fe.shape_value(vertex, (*particleIndex).second->get_reference_location());	//функция формы вершины в эээ... частице?
-				distance = sqrt( pow(((*particleIndex).second->get_reference_location()[0] - cell->vertex(vertex)[0]), 2) +
-				pow(((*particleIndex).second->get_reference_location()[1] - cell->vertex(vertex)[1]), 2) );
+			//	shapeValue = fe.shape_value(vertex, (*particleIndex).second->get_reference_location());	//функция формы вершины в эээ... частице?
+				distance = sqrt( pow((mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(0) - cell->vertex(vertex)[0]), 2) +
+				pow((mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(1) - cell->vertex(vertex)[1]), 2) );//посмотреть расстояние ещё раз
+			
+			//	fout << mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(0) << '\t'
+			//	<< mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(1) << '\t'
+			//	<< cell->vertex(vertex)[0] << '\t' << cell->vertex(vertex)[1] << '\t' << 1 / (1 + distance) << '\t' << shapeValue << std::endl;
 
 				//увеличение скорости в узле на функцию формы на скорость частицы
 			//	node_velocityX[cell->vertex_dof_index(vertex,0)] += shapeValue * (*particleIndex).second->get_velocity_component(0);
 			//	node_velocityY[cell->vertex_dof_index(vertex,0)] += shapeValue * (*particleIndex).second->get_velocity_component(1);
 				
-				node_velocityX[cell->vertex_dof_index(vertex,0)] += distance * (*particleIndex).second->get_velocity_component(0);
-				node_velocityY[cell->vertex_dof_index(vertex,0)] += distance * (*particleIndex).second->get_velocity_component(1);
+				node_velocityX[cell->vertex_dof_index(vertex,0)] += 1 / (distance+1) * (*particleIndex).second->get_velocity_component(0);
+				node_velocityY[cell->vertex_dof_index(vertex,0)] += 1 / (distance+1) * (*particleIndex).second->get_velocity_component(1);
 								
 				//сумма весов
 			//	node_weights[cell->vertex_dof_index(vertex,0)] += shapeValue;		
-				node_weights[cell->vertex_dof_index(vertex,0)] += distance;		
+				node_weights[cell->vertex_dof_index(vertex,0)] += 1 / (distance+1);		
 
 
 			}//particle

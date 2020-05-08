@@ -100,7 +100,7 @@ void tube::build_grid ()
 {
   TimerOutput::Scope timer_section(*timer, "Mesh construction");
   
-  const Point<2> bottom_left = Point<2> (-3,-2);//прямоугольник размером 13*4 => высота = 4; а = 2!!!!!!!!!!!!!!!!!!
+  const Point<2> bottom_left = Point<2> (-3,-2);//прямоугольник размером 13*4 => высота = 4; а = 2!
   const Point<2> top_right = Point<2> (10,2);
 
   std::vector< unsigned int > repetitions {30,15}; //origin 20*6
@@ -687,7 +687,7 @@ void tube::run()
 	solutionVy=0.0;
 	solutionP=0.0;
 
-	double	EPS = 0.0015;//0.00015
+	double	EPS = 0.005;//0.00015
 	std::unordered_map<unsigned int, double> lastVelosity;//контейнер для скоростей на предыдущей итерации
 	std::unordered_map<unsigned int, double> nowVelosity;//контейнер для скоростей на текущей итерации
 	

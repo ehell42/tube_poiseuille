@@ -59,6 +59,7 @@ public:
 	Triangulation<2>::cell_iterator get_surrounding_cell(const Triangulation<2> &triangulation) const;
 	
 	unsigned int find_closest_vertex_of_cell(const typename Triangulation<2>::active_cell_iterator &cell, const Mapping<2> &mapping);
+
 	
 private:
 	Point<2> location;
@@ -163,6 +164,12 @@ public:
 	double time,time_step;							//!< Шаг решения задачи методом конечных элементов
 	int timestep_number;
 	
+	unsigned int	hx_step = 20;		//параметры сетки
+	unsigned int	hy_step = 6;
+
+	std::unordered_map<unsigned int, std::vector<double>> needInfDoFs;	//степень свободы и у (тк х уже знаем)
+
+	
 	Vector<double> solutionVx, solutionVy, solutionP, correctionVx, correctionVy, predictionVx, predictionVy;	//!< Вектор решения, коррекции и прогноза на текущем шаге по времени
 	Vector<double> old_solutionVx, old_solutionVy, old_solutionP;		//!< Вектор решения на предыдущем шаге по времени (используется для вычисления разности с текущим и последующей коррекции скоростей частиц)
 	Vector<double> vel_in_px, vel_in_py;
@@ -189,5 +196,14 @@ private:
 };
 
 bool compare_particle_association(const unsigned int a, const unsigned int b, const Tensor<1,2> &particle_direction, const std::vector<Tensor<1,2> > &center_directions);
+
+typedef struct infParticle
+{
+	double	coordX;
+	double	coordY;
+	double	vX;
+	double	vY;
+};
+
 
 #endif // PFEM2PARTICLE_H

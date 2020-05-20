@@ -102,8 +102,11 @@ void tube::build_grid ()
   
   const Point<2> bottom_left = Point<2> (-3,-2);//прямоугольник размером 13*4 => высота = 4; а = 2!
   const Point<2> top_right = Point<2> (10,2);
+  
 
-  std::vector< unsigned int > repetitions {30,15}; //origin 20*6
+  hx_step = 30;
+  hy_step = 15;
+  std::vector< unsigned int > repetitions {hx_step,hy_step}; //origin 20*6
 
   GridGenerator::subdivided_hyper_rectangle(tria,repetitions,bottom_left,top_right, true);
   
@@ -172,12 +175,16 @@ void tube::setup_system()
     old_solutionP.reinit (dof_handlerP.n_dofs());
     system_rP.reinit (dof_handlerP.n_dofs());
 
-	/*запись степеней свободы и у-координат при х == 4.8*/
+	/*запись степеней свободы и у-координат при х == 4.8, запись координат, соответствующих всем вершинам*/
+	std::vector<double>	coord(2);
 	DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();	//итератор, ходит по активным ячейкам
 	for (; cell != endc; ++cell) {
 		for (unsigned int i=0; i<4; ++i) {	//смотрит вершины в ячейке
 			if (fabs(cell->vertex(i)[0] - 4.8) < 1.e-3)	//если хi-й вершины == 4.8
 				needStepDoFs.emplace(cell->vertex_dof_index(i, 0), cell->vertex(i)[1]);	//записывает степень свободы и у-координату
+			coord[0]=cell->vertex(i)[0];
+			coord[1]=cell->vertex(i)[1];
+			needInfDoFs.emplace(cell->vertex_dof_index(i, 0), coord);
 		}
 	}
 }
@@ -687,7 +694,7 @@ void tube::run()
 	solutionVy=0.0;
 	solutionP=0.0;
 
-	double	EPS = 0.005;//0.00015
+	double	EPS = 0.002;//0.00015
 	std::unordered_map<unsigned int, double> lastVelosity;//контейнер для скоростей на предыдущей итерации
 	std::unordered_map<unsigned int, double> nowVelosity;//контейнер для скоростей на текущей итерации
 	
@@ -702,6 +709,7 @@ void tube::run()
 		lastVelosity.emplace(needDots.first, solutionVx[needDots.first]);
 
 	nowVelosity = lastVelosity;
+
 	for (; time<=15; time+=time_step, ++timestep_number) {
 		std::cout << std::endl << "Time step " << timestep_number << " at t=" << time << std::endl;
 		
@@ -745,7 +753,7 @@ void tube::run()
 				/*вычисляем истинное решение, зная координаты х и у*/
 				double	a = 2.0;
 				double	mu = 1.0;
-				realVelocity = 10.0 / (4 * mu) * (a * a - needDots.second * needDots.second);
+				realVelocity = 10.0 / (2.0 * mu) * (a * a - needDots.second * needDots.second);
 
 				std::cout << "real velocity (I think) = " << realVelocity << std::endl;
 

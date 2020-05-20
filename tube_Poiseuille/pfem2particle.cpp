@@ -29,6 +29,11 @@
 #include <deal.II/base/tensor.h>
 #include <deal.II/grid/tria_accessor.h>
 
+#include <deal.II/lac/solver_gmres.h>
+#include <deal.II/lac/precondition.h>
+#include <deal.II/lac/block_vector.h>
+#include <deal.II/lac/block_sparse_matrix.h>
+
 #include "omp.h"
 
 pfem2Particle::pfem2Particle(const Point<2> & location,const Point<2> & reference_location,const unsigned id)
@@ -687,6 +692,17 @@ void pfem2Solver::move_particles() //перенос частиц
 }
 
 
+
+
+//b для у
+//отсюда две системы, каждая решается отдельно
+//выбираем солвер)))))
+//весовая функция, дорогуша)))))))))))))))))
+//you've done it
+
+
+
+
 /*!
  * \brief "Раздача" скоростей с частиц на узлы сетки
  * 
@@ -698,7 +714,7 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	TimerOutput::Scope timer_section(*timer, "Distribution of particles' velocities to grid nodes");
 		
 	Vector<double> node_velocityX, node_velocityY;	//скорости в узлах
-	Vector<double> node_weights;	//веса в узлах
+	Vector<double> node_weights, node_weightsX, node_weightsY;	//веса в узлах
 	
 	double shapeValue;
 	double distance;
@@ -707,11 +723,22 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	node_velocityX.reinit (tria.n_vertices(), 0.0);	
 	node_velocityY.reinit (tria.n_vertices(), 0.0);
 	node_weights.reinit (tria.n_vertices(), 0.0);
+	node_weightsX.reinit (tria.n_vertices(), 0.0);
+	node_weightsY.reinit (tria.n_vertices(), 0.0);
+
+	std::unordered_map<unsigned int, std::vector<infParticle>>	needInfForSolve;
+	std::vector<infParticle>	needAboutParticle;
+	infParticle	tmpInf;
+	int	poly_degree = 4;
+	Vector<double> b(poly_degree);
+	Vector<double>	c(poly_degree);
 
 	std::ofstream fout;
 	fout.open("distance.txt");
+	FullMatrix<double>	B(poly_degree);
+	double				h = 4.0 / (hy_step * 2);
 
-	typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
+/*	typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
 	for (; cell != endc; ++cell) {	//цикл по ячейкам
 	
 		for (unsigned int vertex=0; vertex<GeometryInfo<2>::vertices_per_cell; ++vertex){	//цикл по вершинам
@@ -719,24 +746,29 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 			for (auto particleIndex = particle_handler.particles_in_cell_begin(cell); 
 	                                   particleIndex != particle_handler.particles_in_cell_end(cell); ++particleIndex ){	//цикл по частицам
 										   
-			//	shapeValue = fe.shape_value(vertex, (*particleIndex).second->get_reference_location());	//функция формы вершины в эээ... частице?
-				distance = sqrt( pow((mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(0) - cell->vertex(vertex)[0]), 2) +
-				pow((mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(1) - cell->vertex(vertex)[1]), 2) );//посмотреть расстояние ещё раз
+				shapeValue = fe.shape_value(vertex, (*particleIndex).second->get_reference_location());	//функция формы вершины в эээ... частице?
+			//	distance = sqrt( pow((mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(0) - cell->vertex(vertex)[0]), 2) +
+			//	pow((mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(1) - cell->vertex(vertex)[1]), 2) );//посмотреть расстояние ещё раз
 			
+
 			//	fout << mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(0) << '\t'
 			//	<< mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(1) << '\t'
 			//	<< cell->vertex(vertex)[0] << '\t' << cell->vertex(vertex)[1] << '\t' << 1 / (1 + distance) << '\t' << shapeValue << std::endl;
 
 				//увеличение скорости в узле на функцию формы на скорость частицы
-			//	node_velocityX[cell->vertex_dof_index(vertex,0)] += shapeValue * (*particleIndex).second->get_velocity_component(0);
-			//	node_velocityY[cell->vertex_dof_index(vertex,0)] += shapeValue * (*particleIndex).second->get_velocity_component(1);
+				node_velocityX[cell->vertex_dof_index(vertex,0)] += shapeValue * (*particleIndex).second->get_velocity_component(0);
+				node_velocityY[cell->vertex_dof_index(vertex,0)] += shapeValue * (*particleIndex).second->get_velocity_component(1);
 				
-				node_velocityX[cell->vertex_dof_index(vertex,0)] += 1 / (distance+1) * (*particleIndex).second->get_velocity_component(0);
-				node_velocityY[cell->vertex_dof_index(vertex,0)] += 1 / (distance+1) * (*particleIndex).second->get_velocity_component(1);
+			//	node_velocityX[cell->vertex_dof_index(vertex,0)] += 1.0 / (distance + (13.0 / hx_step)) * (*particleIndex).second->get_velocity_component(0);
+			//	node_velocityY[cell->vertex_dof_index(vertex,0)] += 1.0 / (distance + (4.0 / hy_step)) * (*particleIndex).second->get_velocity_component(1);
 								
 				//сумма весов
-			//	node_weights[cell->vertex_dof_index(vertex,0)] += shapeValue;		
-				node_weights[cell->vertex_dof_index(vertex,0)] += 1 / (distance+1);		
+				node_weights[cell->vertex_dof_index(vertex,0)] += shapeValue;		
+
+			//	node_weights[cell->vertex_dof_index(vertex,0)] += 1 / (distance+1);	
+
+			//	node_weightsX[cell->vertex_dof_index(vertex,0)] += 1.0 / (distance+(13.0 / hx_step));
+			//	node_weightsY[cell->vertex_dof_index(vertex,0)] += 1.0 / (distance+(4.0 / hy_step));
 
 
 			}//particle
@@ -744,13 +776,162 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	}//cell
 	
 	for (unsigned int i=0; i<tria.n_vertices(); ++i) {	//в каждом узле текущая скорость делится на вес в узле
+	//	node_velocityX[i] /= node_weightsX[i];
+	//	node_velocityY[i] /= node_weightsY[i];
+
 		node_velocityX[i] /= node_weights[i];
 		node_velocityY[i] /= node_weights[i];
 	}//i
 		
 	solutionVx = node_velocityX;
-	solutionVy = node_velocityY;
+	solutionVy = node_velocityY;*/
+
+	//каждому дофу вершины ставится в соответствие информация о частицах, которые её окружают (координаты и скорости) в needInfForSolve
+	typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
+	for (; cell != endc; ++cell) {	//цикл по ячейкам
 	
+		for (unsigned int vertex=0; vertex<GeometryInfo<2>::vertices_per_cell; ++vertex){	//цикл по вершинам
+				
+			for (auto particleIndex = particle_handler.particles_in_cell_begin(cell); 
+	                                   particleIndex != particle_handler.particles_in_cell_end(cell); ++particleIndex ){	//цикл по частицам
+
+				if (needInfForSolve.find(cell->vertex_dof_index(vertex, 0)) == needInfForSolve.end()) {//если не было -- создали и записали инфу о частице
+
+					tmpInf.vX = (*particleIndex).second->get_velocity_component(0);
+					tmpInf.vY = (*particleIndex).second->get_velocity_component(1);
+					tmpInf.coordX=mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(0);
+					tmpInf.coordY=mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(1);
+
+					needAboutParticle.clear();
+					needAboutParticle.push_back(tmpInf);
+					needInfForSolve.emplace(cell->vertex_dof_index(vertex, 0), needAboutParticle);	
+				}
+				else
+				{
+					std::unordered_map<unsigned int, std::vector<infParticle>>::const_iterator got;
+					got = needInfForSolve.find(cell->vertex_dof_index(vertex, 0));
+					needAboutParticle.clear();
+					needAboutParticle = got->second;
+
+					tmpInf.vX = (*particleIndex).second->get_velocity_component(0);
+					tmpInf.vY = (*particleIndex).second->get_velocity_component(1);
+					tmpInf.coordX=mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(0);
+					tmpInf.coordY=mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(1);
+
+					needAboutParticle.push_back(tmpInf);
+					needInfForSolve[cell->vertex_dof_index(vertex, 0)]=needAboutParticle;
+				}
+			}//particle
+		}//vertex
+	}//cell
+	
+	for (auto needDots : needInfForSolve){	//ходит по вершинами
+		
+		if (needDots.first==0 || needDots.first==2 ||needDots.first==278 ||needDots.first==279 ||needDots.first==155 ||needDots.first==154 ||
+		needDots.first==464 ||needDots.first==465 ||needDots.first==92 ||needDots.first==93 ||needDots.first==309 ||needDots.first==310 ||
+		needDots.first==216 ||needDots.first==217)
+			std::cout << needDots.first << " vertex " << std::endl;
+		FullMatrix<double>	B_all(poly_degree);
+		Vector<double>	f(poly_degree);
+		for (int i = 0; i < (needDots.second).size(); i++)	//ходит по частицам
+		{
+					if (needDots.first==0 || needDots.first==2 ||needDots.first==278 ||needDots.first==279 ||needDots.first==155 ||needDots.first==154 ||
+					needDots.first==464 ||needDots.first==465 ||needDots.first==92 ||needDots.first==93 ||needDots.first==309 ||needDots.first==310 ||
+					needDots.first==216 ||needDots.first==217)
+						std::cout << i << " particle\t";
+					
+					for (int j = 0; j < poly_degree; j++)	//делает вектор b
+						b[j] = pow((needDots.second[i]).coordX, j);
+					
+					double	d = sqrt(pow(needInfDoFs[needDots.first][0]-(needDots.second[i]).coordX,2)+pow(needInfDoFs[needDots.first][1]-(needDots.second[i]).coordY,2));
+					double	thetta = exp(-pow(d/h,2));// / (pow(needInfDoFs[needDots.first][0]+(needDots.second[i]).coordX, 2)+pow(eps, 2));
+					f.add((needDots.second[i]).vX * thetta, b);//f для каждой частицы
+					
+					B.outer_product(b,b);//B для каждой частицы
+					B.equ(thetta, B);//домножаем на весовую функцию
+
+					if (needDots.first==0 || needDots.first==2 ||needDots.first==278 ||needDots.first==279 ||needDots.first==155 ||needDots.first==154 ||
+					needDots.first==464 ||needDots.first==465 ||needDots.first==92 ||needDots.first==93 ||needDots.first==309 ||needDots.first==310 ||
+					needDots.first==216 ||needDots.first==217){
+						std::cout << (needDots.second[i]).vX << "\t f-vector \t" << thetta << "\t thetta\n";
+					}
+
+					B_all.add(1,B);//суммирование матриц В для всех частиц	=>	B_all * c = f
+		}
+
+		SolverControl solver_control(1000, 1e-12);
+		SolverGMRES<Vector<double>> solver(solver_control);
+		solver.solve(B_all, c, f, PreconditionIdentity());
+
+		for (int j = 0; j < poly_degree; j++)	//делает вектор b для вершины
+			b[j] = pow(needInfDoFs[needDots.first][0], j);
+
+
+		if (needDots.first==0 || needDots.first==2 ||needDots.first==278 ||needDots.first==279 ||needDots.first==155 ||needDots.first==154 ||
+		needDots.first==464 ||needDots.first==465 ||needDots.first==92 ||needDots.first==93 ||needDots.first==309 ||needDots.first==310 ||
+		needDots.first==216 ||needDots.first==217){
+			std::cout << std::endl;
+			B_all.print(std::cout);
+			std::cout << std::endl;
+			b.print();
+			std::cout << std::endl;
+		}
+
+		solutionVx[needDots.first] = c * b;
+
+		if (needDots.first==0 || needDots.first==2 ||needDots.first==278 ||needDots.first==279 ||needDots.first==155 ||needDots.first==154 ||
+		needDots.first==464 ||needDots.first==465 ||needDots.first==92 ||needDots.first==93 ||needDots.first==309 ||needDots.first==310 ||
+		needDots.first==216 ||needDots.first==217)		
+			std::cout << "Finally solution:\t" << solutionVx[needDots.first] << std::endl << std::endl << std::endl;
+	
+		
+		
+		
+		//для у
+		FullMatrix<double>	B_all_y(poly_degree);
+		Vector<double>	fy(poly_degree);
+
+		for (int i = 0; i < (needDots.second).size(); i++)	//ходит по частицам
+		{
+					for (int j = 0; j < poly_degree; j++)	//делает вектор b
+						b[j] = pow((needDots.second[i]).coordY, j);
+
+					B.outer_product(b,b);//B для каждой частицы
+
+					double	d = sqrt(pow(needInfDoFs[needDots.first][0]-(needDots.second[i]).coordX,2)+pow(needInfDoFs[needDots.first][1]-(needDots.second[i]).coordY,2));
+					double	thetta = exp(-pow(d/h,2));// / (pow(needInfDoFs[needDots.first][0]+(needDots.second[i]).coordX, 2)+pow(eps, 2));
+					fy.add((needDots.second[i]).vY * thetta, b);//f для каждой частицы
+
+					B.equ(thetta, B);//домножаем на весовую функцию
+					B_all_y.add(1,B);//суммирование матриц В для всех частиц	=>	B_all * c = f
+		}
+
+				
+		SolverControl solver_controlY(1000, 1e-12);
+		SolverGMRES<Vector<double>> solverY(solver_controlY);
+		solverY.solve(B_all_y, c, fy, PreconditionIdentity());
+
+		for (int j = 0; j < poly_degree; j++)	//делает вектор b для вершины
+			b[j] = pow(needInfDoFs[needDots.first][1], j);
+		solutionVy[needDots.first] = c * b;
+
+	
+	//	fout <<	needDots.first << '\t';;
+	//	for (int i = 0; i < (needDots.second).size(); i++)
+	//		fout << (needDots.second)[i].coordX << '\t' << (needDots.second)[i].coordY << '\t';
+	//	fout << std::endl;
+	}
+
+
+/*	fout << "Hello!\n";
+
+	for (auto needDots : needInfForSolve){
+		fout <<	needDots.first << '\t';;
+		for (int i = 0; i < (needDots.second).size(); i++)
+			fout << (needDots.second)[i].coordX << '\t' << (needDots.second)[i].coordY << '\t';
+		fout << std::endl;
+	}*/
+		
 	//std::cout << "Finished distributing particles' velocities to grid" << std::endl;	 
 }
 

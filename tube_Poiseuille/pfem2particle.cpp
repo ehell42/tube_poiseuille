@@ -29,6 +29,8 @@
 #include <deal.II/base/tensor.h>
 #include <deal.II/grid/tria_accessor.h>
 
+#include <deal.II/lac/solver_minres.h>
+
 #include <deal.II/lac/solver_gmres.h>
 #include <deal.II/lac/precondition.h>
 #include <deal.II/lac/block_vector.h>
@@ -701,7 +703,13 @@ void pfem2Solver::move_particles() //перенос частиц
 //you've done it
 
 
-
+int	fractal(int a)
+{
+	if (a > 0)
+		return a * fractal(a - 1);
+	else
+		return 1;
+}
 
 /*!
  * \brief "Раздача" скоростей с частиц на узлы сетки
@@ -729,13 +737,14 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	std::unordered_map<unsigned int, std::vector<infParticle>>	needInfForSolve;
 	std::vector<infParticle>	needAboutParticle;
 	infParticle	tmpInf;
-	int	poly_degree = 4;
-	Vector<double> b(poly_degree);
-	Vector<double>	c(poly_degree);
+	int	poly_degree = 1;	//степень полинома
+	int	dimVect = fractal(2 + poly_degree) / fractal(poly_degree) / fractal(2); //размерность в-ра b
+	Vector<double> b(dimVect);
+	Vector<double>	c(dimVect);
 
 	std::ofstream fout;
 	fout.open("distance.txt");
-	FullMatrix<double>	B(poly_degree);
+
 	double				h = 4.0 / (hy_step * 2);
 
 /*	typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
@@ -786,6 +795,8 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	solutionVx = node_velocityX;
 	solutionVy = node_velocityY;*/
 
+
+
 	//каждому дофу вершины ставится в соответствие информация о частицах, которые её окружают (координаты и скорости) в needInfForSolve
 	typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
 	for (; cell != endc; ++cell) {	//цикл по ячейкам
@@ -826,113 +837,81 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	}//cell
 	
 	for (auto needDots : needInfForSolve){	//ходит по вершинами
-		
-		if (needDots.first==0 || needDots.first==2 ||needDots.first==278 ||needDots.first==279 ||needDots.first==155 ||needDots.first==154 ||
-		needDots.first==464 ||needDots.first==465 ||needDots.first==92 ||needDots.first==93 ||needDots.first==309 ||needDots.first==310 ||
-		needDots.first==216 ||needDots.first==217)
-			std::cout << needDots.first << " vertex " << std::endl;
-		FullMatrix<double>	B_all(poly_degree);
-		Vector<double>	f(poly_degree);
+	if (needDots.first < 30 && needDots.first > 20)	std::cout << needDots.first << " vertex " << std::endl;
+
+		FullMatrix<double>	B_all(dimVect);
+		Vector<double>	f(dimVect);
+		Vector<double>	fy(dimVect);
 		for (int i = 0; i < (needDots.second).size(); i++)	//ходит по частицам
 		{
-					if (needDots.first==0 || needDots.first==2 ||needDots.first==278 ||needDots.first==279 ||needDots.first==155 ||needDots.first==154 ||
-					needDots.first==464 ||needDots.first==465 ||needDots.first==92 ||needDots.first==93 ||needDots.first==309 ||needDots.first==310 ||
-					needDots.first==216 ||needDots.first==217)
-						std::cout << i << " particle\t";
+		//	 if (needDots.first < 30 && needDots.first > 20)	std::cout << i << " particle\t";
 					
-					for (int j = 0; j < poly_degree; j++)	//делает вектор b
-						b[j] = pow((needDots.second[i]).coordX, j);
+					int sum = 0;
+					for (int j = 0; j <= poly_degree; j++)	//делает вектор b!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+					{	
+						sum += j;
+						for (int s = 0; s <= j; s++)
+						b[sum + s] = pow((needDots.second[i]).coordX, j - s) * pow((needDots.second[i]).coordY, s);
+					}
 					
 					double	d = sqrt(pow(needInfDoFs[needDots.first][0]-(needDots.second[i]).coordX,2)+pow(needInfDoFs[needDots.first][1]-(needDots.second[i]).coordY,2));
-					double	thetta = exp(-pow(d/h,2));// / (pow(needInfDoFs[needDots.first][0]+(needDots.second[i]).coordX, 2)+pow(eps, 2));
-					f.add((needDots.second[i]).vX * thetta, b);//f для каждой частицы
+					double	thetta = exp(-pow(d/h,2));
+
+					f.add((needDots.second[i]).vX * thetta, b);//f для каждой частицы по х
+					fy.add((needDots.second[i]).vY * thetta, b);//f для каждой частицы по у
 					
+					FullMatrix<double>	B(poly_degree);
 					B.outer_product(b,b);//B для каждой частицы
 					B.equ(thetta, B);//домножаем на весовую функцию
 
-					if (needDots.first==0 || needDots.first==2 ||needDots.first==278 ||needDots.first==279 ||needDots.first==155 ||needDots.first==154 ||
-					needDots.first==464 ||needDots.first==465 ||needDots.first==92 ||needDots.first==93 ||needDots.first==309 ||needDots.first==310 ||
-					needDots.first==216 ||needDots.first==217){
-						std::cout << (needDots.second[i]).vX << "\t f-vector \t" << thetta << "\t thetta\n";
-					}
+				//	if (needDots.first < 30 && needDots.first > 20) std::cout << (needDots.second[i]).vX << "\t f-vector \t" << thetta << "\t thetta\n";
 
 					B_all.add(1,B);//суммирование матриц В для всех частиц	=>	B_all * c = f
 		}
 
 		SolverControl solver_control(1000, 1e-12);
+//		SolverMinRes<Vector<double>> solver(solver_control);
 		SolverGMRES<Vector<double>> solver(solver_control);
+
 		solver.solve(B_all, c, f, PreconditionIdentity());
 
-		for (int j = 0; j < poly_degree; j++)	//делает вектор b для вершины
-			b[j] = pow(needInfDoFs[needDots.first][0], j);
+		int sum = 0;
+		for (int j = 0; j <= poly_degree; j++)	//делает вектор b!!!!!!!!!!!!!!!!!!!!!!!!!!!!!для вершины
+		{	
+			sum += j;
+			for (int s = 0; s <= j; s++)
+			b[sum + s] = pow(needInfDoFs[needDots.first][0], j - s) * pow(needInfDoFs[needDots.first][1], s);
+		}
 
-
-		if (needDots.first==0 || needDots.first==2 ||needDots.first==278 ||needDots.first==279 ||needDots.first==155 ||needDots.first==154 ||
-		needDots.first==464 ||needDots.first==465 ||needDots.first==92 ||needDots.first==93 ||needDots.first==309 ||needDots.first==310 ||
-		needDots.first==216 ||needDots.first==217){
+		if (needDots.first < 30 && needDots.first > 20)
+		{
 			std::cout << std::endl;
 			B_all.print(std::cout);
 			std::cout << std::endl;
 			b.print();
 			std::cout << std::endl;
+			c.print();
+			std::cout << std::endl;
+			f.print();
+			std::cout << std::endl;
 		}
 
 		solutionVx[needDots.first] = c * b;
-
-		if (needDots.first==0 || needDots.first==2 ||needDots.first==278 ||needDots.first==279 ||needDots.first==155 ||needDots.first==154 ||
-		needDots.first==464 ||needDots.first==465 ||needDots.first==92 ||needDots.first==93 ||needDots.first==309 ||needDots.first==310 ||
-		needDots.first==216 ||needDots.first==217)		
-			std::cout << "Finally solution:\t" << solutionVx[needDots.first] << std::endl << std::endl << std::endl;
+	
+		if (needDots.first < 30 && needDots.first > 20)
+		std::cout << "Finally solution:\t" << solutionVx[needDots.first] << std::endl << std::endl << std::endl;
 	
 		
-		
-		
-		//для у
-		FullMatrix<double>	B_all_y(poly_degree);
-		Vector<double>	fy(poly_degree);
-
-		for (int i = 0; i < (needDots.second).size(); i++)	//ходит по частицам
-		{
-					for (int j = 0; j < poly_degree; j++)	//делает вектор b
-						b[j] = pow((needDots.second[i]).coordY, j);
-
-					B.outer_product(b,b);//B для каждой частицы
-
-					double	d = sqrt(pow(needInfDoFs[needDots.first][0]-(needDots.second[i]).coordX,2)+pow(needInfDoFs[needDots.first][1]-(needDots.second[i]).coordY,2));
-					double	thetta = exp(-pow(d/h,2));// / (pow(needInfDoFs[needDots.first][0]+(needDots.second[i]).coordX, 2)+pow(eps, 2));
-					fy.add((needDots.second[i]).vY * thetta, b);//f для каждой частицы
-
-					B.equ(thetta, B);//домножаем на весовую функцию
-					B_all_y.add(1,B);//суммирование матриц В для всех частиц	=>	B_all * c = f
-		}
-
-				
+		//для у		
 		SolverControl solver_controlY(1000, 1e-12);
+//		SolverMinRes<Vector<double>> solverY(solver_controlY);
 		SolverGMRES<Vector<double>> solverY(solver_controlY);
-		solverY.solve(B_all_y, c, fy, PreconditionIdentity());
 
-		for (int j = 0; j < poly_degree; j++)	//делает вектор b для вершины
-			b[j] = pow(needInfDoFs[needDots.first][1], j);
+		solverY.solve(B_all, c, fy, PreconditionIdentity());
+
 		solutionVy[needDots.first] = c * b;
-
-	
-	//	fout <<	needDots.first << '\t';;
-	//	for (int i = 0; i < (needDots.second).size(); i++)
-	//		fout << (needDots.second)[i].coordX << '\t' << (needDots.second)[i].coordY << '\t';
-	//	fout << std::endl;
 	}
-
-
-/*	fout << "Hello!\n";
-
-	for (auto needDots : needInfForSolve){
-		fout <<	needDots.first << '\t';;
-		for (int i = 0; i < (needDots.second).size(); i++)
-			fout << (needDots.second)[i].coordX << '\t' << (needDots.second)[i].coordY << '\t';
-		fout << std::endl;
-	}*/
-		
-	//std::cout << "Finished distributing particles' velocities to grid" << std::endl;	 
+ 
 }
 
 void pfem2Solver::calculate_loads(types::boundary_id patch_id, std::ofstream *out){

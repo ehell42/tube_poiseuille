@@ -104,8 +104,10 @@ void tube::build_grid ()
   const Point<2> top_right = Point<2> (10,2);
   
 
-  hx_step = 30;
-  hy_step = 15;
+//  hx_step = 30;
+//  hy_step = 15;
+  hx_step = 13*3;
+  hy_step = 4*3;
   std::vector< unsigned int > repetitions {hx_step,hy_step}; //origin 20*6
 
   GridGenerator::subdivided_hyper_rectangle(tria,repetitions,bottom_left,top_right, true);
@@ -742,33 +744,33 @@ void tube::run()
 		}
 
 		/*сравниваем скорости с истинным решением*/
-		if (max < EPS) {
-			std::ofstream fout;
-			double	max_error = 0;
-			fout.open("Error_at_x_5.txt");
+	//	if (max < EPS) {
+	//		std::ofstream fout;
+	//		double	max_error = 0;
+	//		fout.open("Error_at_x_5.txt");
 
-			for (auto needDots : needStepDoFs) {
-				double	realVelocity;
+	//		for (auto needDots : needStepDoFs) {
+	//			double	realVelocity;
 
 				/*вычисляем истинное решение, зная координаты х и у*/
-				double	a = 2.0;
-				double	mu = 1.0;
-				realVelocity = 10.0 / (2.0 * mu) * (a * a - needDots.second * needDots.second);
+	//			double	a = 2.0;
+	//			double	mu = 1.0;
+	//			realVelocity = 10.0 / (2.0 * mu) * (a * a - needDots.second * needDots.second);
 
-				std::cout << "real velocity (I think) = " << realVelocity << std::endl;
+	//			std::cout << "real velocity (I think) = " << realVelocity << std::endl;
 
-				std::cout << "founded velocity = " << nowVelosity[needDots.first] << std::endl;
+//				std::cout << "founded velocity = " << nowVelosity[needDots.first] << std::endl;
 
 				/*записываем в файл координаты и разницу */
-				if (max_error < fabs(nowVelosity[needDots.first] - realVelocity))
-					max_error = fabs(nowVelosity[needDots.first] - realVelocity);
-				fout << 4.8 << '\t' << needDots.second << '\t' << fabs(nowVelosity[needDots.first] - realVelocity) << std::endl; 
-			}
+//				if (max_error < fabs(nowVelosity[needDots.first] - realVelocity))
+//					max_error = fabs(nowVelosity[needDots.first] - realVelocity);
+//				fout << 4.8 << '\t' << needDots.second << '\t' << fabs(nowVelosity[needDots.first] - realVelocity) << std::endl; 
+//			}
 			
-			fout.close();
-			std::cout << "Error was written. Max error is " << max_error << std::endl;
-			break ;
-		}
+//			fout.close();
+//			std::cout << "Error was written. Max error is " << max_error << std::endl;
+//			break ;
+//		}
 
 		lastVelosity = nowVelosity;
 

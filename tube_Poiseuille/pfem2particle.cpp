@@ -694,14 +694,11 @@ void pfem2Solver::move_particles() //перенос частиц
 }
 
 
-
-
-//b для у
-//отсюда две системы, каждая решается отдельно
-//выбираем солвер)))))
-//весовая функция, дорогуша)))))))))))))))))
-//you've done it
-
+struct center
+{
+	double	x;
+	double	y;
+};
 
 int	fractal(int a)
 {
@@ -742,10 +739,24 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	Vector<double> b(dimVect);
 	Vector<double>	c(dimVect);
 
+	std::unordered_map<unsigned int, std::vector<center>> centerCoord;
+
+	Vector<double>	sum_velocityX;
+	Vector<double>	sum_velocityY;
+	Vector<int>	nbr_velocityX;
+	Vector<int>	nbr_velocityY;
+
+	sum_velocityX.reinit (tria.n_vertices(), 0.0);	
+	sum_velocityY.reinit (tria.n_vertices(), 0.0);
+	nbr_velocityX.reinit (tria.n_vertices(), 0.0);	
+	nbr_velocityY.reinit (tria.n_vertices(), 0.0);
+
+	std::vector<center>	cen;
+
 	std::ofstream fout;
 	fout.open("distance.txt");
 
-	double				h = 4.0 / (hy_step * 2);
+	double				h = 2.0 / (2 * hy_step );
 
 /*	typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
 	for (; cell != endc; ++cell) {	//цикл по ячейкам
@@ -795,12 +806,26 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	solutionVx = node_velocityX;
 	solutionVy = node_velocityY;*/
 
-
-
 	//каждому дофу вершины ставится в соответствие информация о частицах, которые её окружают (координаты и скорости) в needInfForSolve
 	typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
 	for (; cell != endc; ++cell) {	//цикл по ячейкам
-	
+
+		double	max_x = -100.0, min_x = 100;
+		double	max_y = -100.0, min_y = 100;
+		center	center;
+		for (unsigned int vertex=0; vertex<GeometryInfo<2>::vertices_per_cell; ++vertex){	//выясняем координаты центра ячейки
+				if (cell->vertex(vertex)[0] < min_x && cell->vertex(vertex)[1] < min_y){
+					min_x = cell->vertex(vertex)[0];
+					min_y = cell->vertex(vertex)[1];
+				}
+				if (cell->vertex(vertex)[0] > max_x && cell->vertex(vertex)[1] > max_y){
+					max_x = cell->vertex(vertex)[0];
+					max_y = cell->vertex(vertex)[1];
+				}
+		}
+		center.x = min_x + (max_x - min_x) / 2;	//центр ячейки по х
+		center.y = min_y + (max_y - min_y) / 2;	//центр ячейки по у
+
 		for (unsigned int vertex=0; vertex<GeometryInfo<2>::vertices_per_cell; ++vertex){	//цикл по вершинам
 				
 			for (auto particleIndex = particle_handler.particles_in_cell_begin(cell); 
@@ -833,85 +858,89 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 					needInfForSolve[cell->vertex_dof_index(vertex, 0)]=needAboutParticle;
 				}
 			}//particle
+			if (centerCoord.find(cell->vertex_dof_index(vertex, 0)) == centerCoord.end()) {//если не было -- создали и записали инфу о центральных координатах
+				cen.clear();
+				cen.push_back(center);
+				centerCoord.emplace(cell->vertex_dof_index(vertex, 0), cen);
+			}
+			else {
+				centerCoord[cell->vertex_dof_index(vertex,0)].push_back(center);	//каждой вершине приписать центр ячейки
+			}
+
 		}//vertex
 	}//cell
 	
 	for (auto needDots : needInfForSolve){	//ходит по вершинами
-	if (needDots.first < 30 && needDots.first > 20)	std::cout << needDots.first << " vertex " << std::endl;
 
-		FullMatrix<double>	B_all(dimVect);
-		Vector<double>	f(dimVect);
-		Vector<double>	fy(dimVect);
-		for (int i = 0; i < (needDots.second).size(); i++)	//ходит по частицам
+		for (int k = 0; k < (centerCoord[needDots.first]).size(); k++)	//ходит по центрам нужных ячеек
 		{
-		//	 if (needDots.first < 30 && needDots.first > 20)	std::cout << i << " particle\t";
-					
-					int sum = 0;
-					for (int j = 0; j <= poly_degree; j++)	//делает вектор b!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-					{	
-						sum += j;
-						for (int s = 0; s <= j; s++)
-						b[sum + s] = pow((needDots.second[i]).coordX, j - s) * pow((needDots.second[i]).coordY, s);
-					}
-					
-					double	d = sqrt(pow(needInfDoFs[needDots.first][0]-(needDots.second[i]).coordX,2)+pow(needInfDoFs[needDots.first][1]-(needDots.second[i]).coordY,2));
-					double	thetta = exp(-pow(d/h,2));
+			FullMatrix<double>	B_all(dimVect);
+			Vector<double>	f(dimVect);
+			Vector<double>	fy(dimVect);
+			for (int i = 0; i < (needDots.second).size(); i++)	//ходит по частицам
+			{
+						int sum = 0;
+						for (int j = 0; j <= poly_degree; j++)	//делает вектор b относительно центра kй ячейки вокруг нужной вершины
+						{	
+							sum += j;
+							for (int s = 0; s <= j; s++)
+				 				b[sum + s] = pow((needDots.second[i]).coordX-centerCoord[needDots.first][k].x, j - s) * pow((needDots.second[i]).coordY-centerCoord[needDots.first][k].y, s);
+						}
 
-					f.add((needDots.second[i]).vX * thetta, b);//f для каждой частицы по х
-					fy.add((needDots.second[i]).vY * thetta, b);//f для каждой частицы по у
-					
-					FullMatrix<double>	B(poly_degree);
-					B.outer_product(b,b);//B для каждой частицы
-					B.equ(thetta, B);//домножаем на весовую функцию
+//std::cout << needDots.first << " -- particle\t";
+//b.print();
+						double	d = sqrt(pow(centerCoord[needDots.first][k].x-(needDots.second[i]).coordX,2)+pow(centerCoord[needDots.first][k].y-(needDots.second[i]).coordY,2));
+						double	thetta = exp(-pow(d/h,2));// 1 / (pow(d, 2) + 1);
+						f.add((needDots.second[i]).vX * thetta, b);//f для каждой частицы по х
+						fy.add((needDots.second[i]).vY * thetta, b);//f для каждой частицы по у
 
-				//	if (needDots.first < 30 && needDots.first > 20) std::cout << (needDots.second[i]).vX << "\t f-vector \t" << thetta << "\t thetta\n";
+//f.print();
+//std::cout << needDots.second[i].vX << '\n';
+						FullMatrix<double>	B(poly_degree);
+						B.outer_product(b,b);//B для каждой частицы
+						B.equ(thetta, B);//домножаем на весовую функцию
+						B_all.add(1,B);//суммирование матриц В для всех частиц	=>	B_all * c = f
+			}
 
-					B_all.add(1,B);//суммирование матриц В для всех частиц	=>	B_all * c = f
+			SolverControl solver_control(1000, 1e-12);
+			SolverGMRES<Vector<double>> solver(solver_control);
+
+			int sum = 0;
+			for (int j = 0; j <= poly_degree; j++)	//делает вектор b для вершины относительно центра kй ячейки вокруг этой вершины
+			{	
+				sum += j;
+				for (int s = 0; s <= j; s++)
+					b[sum + s] = pow(needInfDoFs[needDots.first][0]-centerCoord[needDots.first][k].x, j - s) * pow(needInfDoFs[needDots.first][1]-centerCoord[needDots.first][k].y, s);
+			}
+			solver.solve(B_all, c, f, PreconditionIdentity());
+
+			sum_velocityX[needDots.first] += c * b;
+			nbr_velocityX[needDots.first]++;
+
+		//	sum_velocityX[needDots.first] += c * b * (1 / (b[1] + 13/hx));
+		//	nbr_velocityX[needDots.first] +=(1 / (b[1] + 13/hx));
+
+			//для у		
+			SolverControl solver_controlY(1000, 1e-12);
+			SolverGMRES<Vector<double>> solverY(solver_controlY);
+
+			solverY.solve(B_all, c, fy, PreconditionIdentity());
+			sum_velocityY[needDots.first] += c * b;
+			nbr_velocityY[needDots.first]++;
+			
+		//	sum_velocityY[needDots.first] += c * b * (1 / (b[2] + 4/hy));
+		//	nbr_velocityY[needDots.first] += (1 / (b[2] + 4/hy));
 		}
-
-		SolverControl solver_control(1000, 1e-12);
-//		SolverMinRes<Vector<double>> solver(solver_control);
-		SolverGMRES<Vector<double>> solver(solver_control);
-
-		solver.solve(B_all, c, f, PreconditionIdentity());
-
-		int sum = 0;
-		for (int j = 0; j <= poly_degree; j++)	//делает вектор b!!!!!!!!!!!!!!!!!!!!!!!!!!!!!для вершины
-		{	
-			sum += j;
-			for (int s = 0; s <= j; s++)
-			b[sum + s] = pow(needInfDoFs[needDots.first][0], j - s) * pow(needInfDoFs[needDots.first][1], s);
-		}
-
-		if (needDots.first < 30 && needDots.first > 20)
-		{
-			std::cout << std::endl;
-			B_all.print(std::cout);
-			std::cout << std::endl;
-			b.print();
-			std::cout << std::endl;
-			c.print();
-			std::cout << std::endl;
-			f.print();
-			std::cout << std::endl;
-		}
-
-		solutionVx[needDots.first] = c * b;
-	
-		if (needDots.first < 30 && needDots.first > 20)
-		std::cout << "Finally solution:\t" << solutionVx[needDots.first] << std::endl << std::endl << std::endl;
-	
-		
-		//для у		
-		SolverControl solver_controlY(1000, 1e-12);
-//		SolverMinRes<Vector<double>> solverY(solver_controlY);
-		SolverGMRES<Vector<double>> solverY(solver_controlY);
-
-		solverY.solve(B_all, c, fy, PreconditionIdentity());
-
-		solutionVy[needDots.first] = c * b;
 	}
- 
+
+	for (unsigned int i=0; i<tria.n_vertices(); ++i) {	//в каждом узле текущая скорость делится на вес в узле
+
+		sum_velocityX[i] /= nbr_velocityX[i];
+		sum_velocityY[i] /= nbr_velocityY[i];
+	}//i
+	solutionVx = sum_velocityX;
+	solutionVy = sum_velocityY;
+
 }
 
 void pfem2Solver::calculate_loads(types::boundary_id patch_id, std::ofstream *out){

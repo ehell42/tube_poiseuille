@@ -734,8 +734,8 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	std::unordered_map<unsigned int, std::vector<infParticle>>	needInfForSolve;
 	std::vector<infParticle>	needAboutParticle;
 	infParticle	tmpInf;
-	int	poly_degree = 1;	//степень полинома
-	int	dimVect = fractal(2 + poly_degree) / fractal(poly_degree) / fractal(2); //размерность в-ра b
+	int	poly_degree =1;	//степень полинома
+	int	dimVect = fractal(2 + poly_degree) / (fractal(poly_degree) * fractal(2)); //размерность в-ра b
 	Vector<double> b(dimVect);
 	Vector<double>	c(dimVect);
 
@@ -756,9 +756,11 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	std::ofstream fout;
 	fout.open("distance.txt");
 
-	double				h = 2.0 / (2 * hy_step );
+	double				h = 2.0 / (hy_step);	//для 4х ячеек
+//	double				h = 1.0 / (hy_step);	//для 1 ячейки
 
-/*	typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
+
+	/*typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
 	for (; cell != endc; ++cell) {	//цикл по ячейкам
 	
 		for (unsigned int vertex=0; vertex<GeometryInfo<2>::vertices_per_cell; ++vertex){	//цикл по вершинам
@@ -806,8 +808,88 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	solutionVx = node_velocityX;
 	solutionVy = node_velocityY;*/
 
+//МНК для середины ячейки
+/*typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
+	for (; cell != endc; ++cell) {	//цикл по ячейкам
+	
+		double	max_x = -100.0, min_x = 100;
+		double	max_y = -100.0, min_y = 100;
+
+		for (unsigned int vertex=0; vertex<GeometryInfo<2>::vertices_per_cell; ++vertex){	//выясняем координаты центра ячейки
+				if (cell->vertex(vertex)[0] < min_x && cell->vertex(vertex)[1] < min_y){
+					min_x = cell->vertex(vertex)[0];
+					min_y = cell->vertex(vertex)[1];
+				}
+				if (cell->vertex(vertex)[0] > max_x && cell->vertex(vertex)[1] > max_y){
+					max_x = cell->vertex(vertex)[0];
+					max_y = cell->vertex(vertex)[1];
+				}
+		}
+		double	center_x = min_x + (max_x - min_x) / 2;	//центр ячейки по х
+		double	center_y = min_y + (max_y - min_y) / 2;	//центр ячейки по у
+
+		for (unsigned int vertex=0; vertex<GeometryInfo<2>::vertices_per_cell; ++vertex){	//цикл по вершинам
+				
+			FullMatrix<double>	B_all(dimVect);
+			Vector<double>		f(dimVect);
+			Vector<double>		fy(dimVect);
+
+			for (auto particleIndex = particle_handler.particles_in_cell_begin(cell); 
+	                                   particleIndex != particle_handler.particles_in_cell_end(cell); ++particleIndex ){	//цикл по частицам
+										   
+				int sum = 0;
+				for (int j = 0; j <= poly_degree; j++)	//делает вектор b относительно центра kй ячейки вокруг нужной вершины
+				{	
+					sum += j;
+					for (int s = 0; s <= j; s++)
+		 				b[sum + s] = pow(mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(0)-center_x, j - s) *
+						  pow(mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(1)-center_y, s);
+				}
+
+				double	d = sqrt(pow(mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(0)-center_x,2)+	
+					pow(mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(1)-center_y,2));
+				double	thetta = exp(-pow(d/h,2));
+//				double	thetta = pow(1 - d / h, 4)*(4*d/h+1);
+//				double	thetta = 1.0 / (pow(d, 2) + 0.01);//	eps=0.1;0.01
+				f.add((*particleIndex).second->get_velocity_component(0) * thetta, b);//f для каждой частицы по х
+				fy.add((*particleIndex).second->get_velocity_component(1) * thetta, b);//f для каждой частицы по у
+				FullMatrix<double>	B(poly_degree);
+				B.outer_product(b,b);//B для каждой частицы
+				B.equ(thetta, B);//домножаем на весовую функцию
+				B_all.add(1,B);//суммирование матриц В для всех частиц	=>	B_all * c = f
+			}//particle
+			//для х
+			SolverControl solver_control(1000, 1e-12);
+			SolverGMRES<Vector<double>> solver(solver_control);
+
+			solver.solve(B_all, c, f, PreconditionIdentity());
+
+			sum_velocityX[cell->vertex_dof_index(vertex, 0)] += c[0];
+			nbr_velocityX[cell->vertex_dof_index(vertex, 0)]++;
+
+			//для у		
+			SolverControl solver_controlY(1000, 1e-12);
+			SolverGMRES<Vector<double>> solverY(solver_controlY);
+
+			solverY.solve(B_all, c, fy, PreconditionIdentity());
+			sum_velocityY[cell->vertex_dof_index(vertex, 0)] += c[0];
+			nbr_velocityY[cell->vertex_dof_index(vertex, 0)]++;
+		}//vertex
+	}//cell
+	
+	for (unsigned int i=0; i<tria.n_vertices(); ++i) {	//в каждом узле текущая скорость делится на вес в узле (количество частиц)
+		sum_velocityX[i] /= nbr_velocityX[i];
+		sum_velocityY[i] /= nbr_velocityY[i];
+	}
+		
+	solutionVx = sum_velocityX;
+	solutionVy = sum_velocityY;*/
+
+
+	//МНК для 4х ячеек и вершины
+
 	//каждому дофу вершины ставится в соответствие информация о частицах, которые её окружают (координаты и скорости) в needInfForSolve
-	typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
+/*	typename DoFHandler<2>::cell_iterator cell = dof_handlerVx.begin(tria.n_levels()-1), endc = dof_handlerVx.end(tria.n_levels()-1);
 	for (; cell != endc; ++cell) {	//цикл по ячейкам
 
 		double	max_x = -100.0, min_x = 100;
@@ -871,77 +953,49 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 	}//cell
 	
 	for (auto needDots : needInfForSolve){	//ходит по вершинами
-
-		for (int k = 0; k < (centerCoord[needDots.first]).size(); k++)	//ходит по центрам нужных ячеек
-		{
 			FullMatrix<double>	B_all(dimVect);
-			Vector<double>	f(dimVect);
-			Vector<double>	fy(dimVect);
+			Vector<double>		f(dimVect);
+			Vector<double>		fy(dimVect);
 			for (int i = 0; i < (needDots.second).size(); i++)	//ходит по частицам
 			{
-						int sum = 0;
-						for (int j = 0; j <= poly_degree; j++)	//делает вектор b относительно центра kй ячейки вокруг нужной вершины
-						{	
-							sum += j;
-							for (int s = 0; s <= j; s++)
-				 				b[sum + s] = pow((needDots.second[i]).coordX-centerCoord[needDots.first][k].x, j - s) * pow((needDots.second[i]).coordY-centerCoord[needDots.first][k].y, s);
-						}
+				int sum = 0;
+				for (int j = 0; j <= poly_degree; j++)	//делает вектор b относительно центра kй ячейки вокруг нужной вершины
+				{	
+					sum += j;
+					for (int s = 0; s <= j; s++)
+		 				b[sum + s] = pow((needDots.second[i]).coordX-needInfDoFs[needDots.first][0], j - s) * pow((needDots.second[i]).coordY-needInfDoFs[needDots.first][1], s);
+				}
 
-//std::cout << needDots.first << " -- particle\t";
-//b.print();
-						double	d = sqrt(pow(centerCoord[needDots.first][k].x-(needDots.second[i]).coordX,2)+pow(centerCoord[needDots.first][k].y-(needDots.second[i]).coordY,2));
-						double	thetta = exp(-pow(d/h,2));// 1 / (pow(d, 2) + 1);
-						f.add((needDots.second[i]).vX * thetta, b);//f для каждой частицы по х
-						fy.add((needDots.second[i]).vY * thetta, b);//f для каждой частицы по у
-
-//f.print();
-//std::cout << needDots.second[i].vX << '\n';
-						FullMatrix<double>	B(poly_degree);
-						B.outer_product(b,b);//B для каждой частицы
-						B.equ(thetta, B);//домножаем на весовую функцию
-						B_all.add(1,B);//суммирование матриц В для всех частиц	=>	B_all * c = f
+				double	d = sqrt(pow(needInfDoFs[needDots.first][0]-(needDots.second[i]).coordX,2)+pow(needInfDoFs[needDots.first][1]-(needDots.second[i]).coordY,2));
+				double	thetta = exp(-pow(d/h,2));// 1.0 / (pow(d, 2) + 0.1);	eps=0.1;0.01
+//				double	thetta = 1.0 / (pow(d, 2) + 0.1);//	eps=0.1;0.01
+				f.add((needDots.second[i]).vX * thetta, b);//f для каждой частицы по х
+				fy.add((needDots.second[i]).vY * thetta, b);//f для каждой частицы по у
+				FullMatrix<double>	B(poly_degree);
+				B.outer_product(b,b);//B для каждой частицы
+				B.equ(thetta, B);//домножаем на весовую функцию
+				B_all.add(1,B);//суммирование матриц В для всех частиц	=>	B_all * c = f
 			}
 
+			//для х
 			SolverControl solver_control(1000, 1e-12);
 			SolverGMRES<Vector<double>> solver(solver_control);
 
-			int sum = 0;
-			for (int j = 0; j <= poly_degree; j++)	//делает вектор b для вершины относительно центра kй ячейки вокруг этой вершины
-			{	
-				sum += j;
-				for (int s = 0; s <= j; s++)
-					b[sum + s] = pow(needInfDoFs[needDots.first][0]-centerCoord[needDots.first][k].x, j - s) * pow(needInfDoFs[needDots.first][1]-centerCoord[needDots.first][k].y, s);
-			}
 			solver.solve(B_all, c, f, PreconditionIdentity());
-
-			sum_velocityX[needDots.first] += c * b;
-			nbr_velocityX[needDots.first]++;
-
-		//	sum_velocityX[needDots.first] += c * b * (1 / (b[1] + 13/hx));
-		//	nbr_velocityX[needDots.first] +=(1 / (b[1] + 13/hx));
+			sum_velocityX[needDots.first] = c[0];
 
 			//для у		
 			SolverControl solver_controlY(1000, 1e-12);
 			SolverGMRES<Vector<double>> solverY(solver_controlY);
 
 			solverY.solve(B_all, c, fy, PreconditionIdentity());
-			sum_velocityY[needDots.first] += c * b;
-			nbr_velocityY[needDots.first]++;
-			
-		//	sum_velocityY[needDots.first] += c * b * (1 / (b[2] + 4/hy));
-		//	nbr_velocityY[needDots.first] += (1 / (b[2] + 4/hy));
-		}
+			sum_velocityY[needDots.first] = c[0];
 	}
 
-	for (unsigned int i=0; i<tria.n_vertices(); ++i) {	//в каждом узле текущая скорость делится на вес в узле
-
-		sum_velocityX[i] /= nbr_velocityX[i];
-		sum_velocityY[i] /= nbr_velocityY[i];
-	}//i
 	solutionVx = sum_velocityX;
 	solutionVy = sum_velocityY;
 
-}
+}*/
 
 void pfem2Solver::calculate_loads(types::boundary_id patch_id, std::ofstream *out){
 	TimerOutput::Scope timer_section(*timer, "Loads calculation");

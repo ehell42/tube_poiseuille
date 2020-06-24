@@ -180,7 +180,7 @@ public:
 	pfem2ParticleHandler particle_handler;
 	FE_Q<2>  			 feVx, feVy, feP;
 	FESystem<2> 		 fe;
-	DoFHandler<2>        dof_handlerVx, dof_handlerVy, dof_handlerP;
+	DoFHandler<2>        dof_handlerVx, dof_handlerVy, dof_handlerP, dof_handlerVert;
 	TimerOutput			 *timer;
 	
 	std::vector<unsigned int> probeDoFnumbers;

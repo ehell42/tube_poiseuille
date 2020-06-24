@@ -690,7 +690,7 @@ void tube::run()
 	
 	build_grid();
 	setup_system();
-	seed_particles({2, 2});
+	seed_particles({3, 3});
 	
 	solutionVx=0.0;
 	solutionVy=0.0;
@@ -707,14 +707,14 @@ void tube::run()
 	std::ofstream os("force.csv");
 
 	/*записываем скорости, соответствующие нужным степеням свободы, на начальном временном слое*/
-	/*DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();	//итератор, ходит по активным ячейкам
+	DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();	//итератор, ходит по активным ячейкам
 	for (; cell != endc; ++cell) {
 		for (unsigned int i=0; i<4; ++i) {	//смотрит вершины в ячейке
 			lastVelosity.emplace(cell->vertex_dof_index(i, 0), solutionVx[cell->vertex_dof_index(i, 0)]);
 		}
 	}
 
-	nowVelosity = lastVelosity;*/
+	nowVelosity = lastVelosity;
 
 	for (; time<=15; time+=time_step, ++timestep_number) {
 		std::cout << std::endl << "Time step " << timestep_number << " at t=" << time << std::endl;
@@ -726,11 +726,11 @@ void tube::run()
 		assemble_system();
 
 		/*записываем скорости, соответствующие нужным степеням свободы, на текущем временном слое*/
-	//	for (auto last : lastVelosity)
-	//		nowVelosity[last.first] = solutionVx[last.first];
+		for (auto last : lastVelosity)
+			nowVelosity[last.first] = solutionVx[last.first];
 
 		/*Проверяем на сколько отличаются скорости на соседних временных слоях*/
-	/*	double	max = 0;
+		/*double	max = 0;
 		for(auto last : lastVelosity) {
 			double	lastVx;
 			double	nowVx;
@@ -748,8 +748,8 @@ void tube::run()
 		}
 std::cout << max << '\n';*/
 		/*сравниваем скорости с истинным решением*/
-		/*//if (max < EPS && time > 9) {
-		if (time > 9) {
+		//if (max < EPS && time > 9) {
+		/*if (time > 9) {
 			std::ofstream fout;
 			double	max_error = 0;
 			fout.open("Error_at_x_5.txt");
@@ -769,7 +769,6 @@ std::cout << max << '\n';*/
 				//записываем в файл координаты и разницу
 				if (max_error < fabs(nowVelosity[needDots.first] - realVelocity))
 					max_error = fabs(nowVelosity[needDots.first] - realVelocity);
-				fout << 4.8 << '\t' << needDots.second << '\t' << fabs(nowVelosity[needDots.first] - realVelocity) << std::endl; 
 			}
 			
 			fout.close();
@@ -777,7 +776,7 @@ std::cout << max << '\n';*/
 			break ;
 		}*/
 
-//		lastVelosity = nowVelosity;
+		lastVelosity = nowVelosity;
 
 		if((timestep_number - 1) % 10 == 0) output_results();
 		

@@ -164,8 +164,8 @@ public:
 	double time,time_step;							//!< Шаг решения задачи методом конечных элементов
 	int timestep_number;
 	
-	unsigned int	hx_step = 20;		//параметры сетки
-	unsigned int	hy_step = 6;
+	unsigned int	hx_step;		//параметры сетки
+	unsigned int	hy_step;
 
 	std::unordered_map<unsigned int, std::vector<double>> needInfDoFs;	//степень свободы и у (тк х уже знаем)
 
@@ -180,7 +180,7 @@ public:
 	pfem2ParticleHandler particle_handler;
 	FE_Q<2>  			 feVx, feVy, feP;
 	FESystem<2> 		 fe;
-	DoFHandler<2>        dof_handlerVx, dof_handlerVy, dof_handlerP, dof_handlerVert;
+	DoFHandler<2>        dof_handlerVx, dof_handlerVy, dof_handlerP;
 	TimerOutput			 *timer;
 	
 	std::vector<unsigned int> probeDoFnumbers;

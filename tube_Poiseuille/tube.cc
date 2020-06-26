@@ -106,8 +106,8 @@ void tube::build_grid ()
 
 //  hx_step = 30;
 //  hy_step = 15;
-  hx_step = 13*3;
-  hy_step = 4*3;
+  hx_step = 13*2;
+  hy_step = 4*2;
   std::vector< unsigned int > repetitions {hx_step,hy_step}; //origin 20*6
 
   GridGenerator::subdivided_hyper_rectangle(tria,repetitions,bottom_left,top_right, true);
@@ -690,31 +690,26 @@ void tube::run()
 	
 	build_grid();
 	setup_system();
-	seed_particles({3, 3});
+	seed_particles({2, 2});
 	
 	solutionVx=0.0;
 	solutionVy=0.0;
 	solutionP=0.0;
 
-	double	EPS = 0.1;//0.00015
-	std::unordered_map<unsigned int, double> lastVelosity;//контейнер для скоростей на предыдущей итерации
-	std::unordered_map<unsigned int, double> nowVelosity;//контейнер для скоростей на текущей итерации
-	
+	double	EPS = 0.001;//0.00015
+
+	Vector<double>	lastVelosity;
+	Vector<double>	nowVelosity;
+
+	lastVelosity.reinit (tria.n_vertices(), 0.0);	
+	nowVelosity.reinit (tria.n_vertices(), 0.0);
+
+
 	//удаление старых файлов VTK (специфическая команда Linux!!!)
 	system("rm solution-*.vtk");
 	system("rm particles-*.vtk");
 
 	std::ofstream os("force.csv");
-
-	/*записываем скорости, соответствующие нужным степеням свободы, на начальном временном слое*/
-	DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();	//итератор, ходит по активным ячейкам
-	for (; cell != endc; ++cell) {
-		for (unsigned int i=0; i<4; ++i) {	//смотрит вершины в ячейке
-			lastVelosity.emplace(cell->vertex_dof_index(i, 0), solutionVx[cell->vertex_dof_index(i, 0)]);
-		}
-	}
-
-	nowVelosity = lastVelosity;
 
 	for (; time<=15; time+=time_step, ++timestep_number) {
 		std::cout << std::endl << "Time step " << timestep_number << " at t=" << time << std::endl;
@@ -726,30 +721,36 @@ void tube::run()
 		assemble_system();
 
 		/*записываем скорости, соответствующие нужным степеням свободы, на текущем временном слое*/
-		for (auto last : lastVelosity)
-			nowVelosity[last.first] = solutionVx[last.first];
+		for (unsigned int i=0; i<tria.n_vertices(); ++i)
+			nowVelosity[i] = solutionVx[i];
 
 		/*Проверяем на сколько отличаются скорости на соседних временных слоях*/
-		/*double	max = 0;
-		for(auto last : lastVelosity) {
-			double	lastVx;
+		double	max = 0;
+		int		node_max = 0;
+		for (unsigned int i=0; i<tria.n_vertices(); ++i) {
+			/*double	lastVx;
 			double	nowVx;
 
-			for (auto last : lastVelosity)
+		for (auto last : lastVelosity)
 				if (last.first == last.first)
 					lastVx = last.second;
 			
 			for (auto now : nowVelosity)
-				if (now.first == last.first)
+				if (now.first == last.first){
 					nowVx = now.second;
+					node = now.first;
+				}*/
 
-			if (fabs(lastVx - nowVx) > max)
-				max = fabs(lastVx - nowVx);
+			if (fabs(lastVelosity[i] - nowVelosity[i]) > max)
+			{
+				max = fabs(lastVelosity[i] - nowVelosity[i]);
+				node_max = i;
+			}
 		}
-std::cout << max << '\n';*/
+	std::cout << max << '\n';	
 		/*сравниваем скорости с истинным решением*/
-		//if (max < EPS && time > 9) {
-		/*if (time > 9) {
+//		if (max < EPS && time > 1) {
+		if (time > 9) {
 			std::ofstream fout;
 			double	max_error = 0;
 			fout.open("Error_at_x_5.txt");
@@ -774,7 +775,7 @@ std::cout << max << '\n';*/
 			fout.close();
 			std::cout << "Error was written. Max error is " << max_error << std::endl;
 			break ;
-		}*/
+		}
 
 		lastVelosity = nowVelosity;
 

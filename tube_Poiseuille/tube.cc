@@ -100,14 +100,14 @@ void tube::build_grid ()
 {
   TimerOutput::Scope timer_section(*timer, "Mesh construction");
   
-  const Point<2> bottom_left = Point<2> (-3,-2);//прямоугольник размером 13*4 => высота = 4; а = 2!
+  const Point<2> bottom_left = Point<2> (0,-2);//прямоугольник размером 13*4 => высота = 4; а = 2!
   const Point<2> top_right = Point<2> (10,2);
   
 
 //  hx_step = 30;
 //  hy_step = 15;
-  hx_step = 13*2;
-  hy_step = 4*2;
+  hx_step = 10*3;
+  hy_step = 4*3;
   std::vector< unsigned int > repetitions {hx_step,hy_step}; //origin 20*6
 
   GridGenerator::subdivided_hyper_rectangle(tria,repetitions,bottom_left,top_right, true);
@@ -182,11 +182,7 @@ void tube::setup_system()
 	DoFHandler<2>::active_cell_iterator cell = dof_handlerVx.begin_active(), endc = dof_handlerVx.end();	//итератор, ходит по активным ячейкам
 	for (; cell != endc; ++cell) {
 		for (unsigned int i=0; i<4; ++i) {	//смотрит вершины в ячейке
-			if (fabs(cell->vertex(i)[0] - 5.0) < 1.e-3)	//если хi-й вершины == 4.8
 				needStepDoFs.emplace(cell->vertex_dof_index(i, 0), cell->vertex(i)[1]);	//записывает степень свободы и у-координату
-			coord[0]=cell->vertex(i)[0];
-			coord[1]=cell->vertex(i)[1];
-			needInfDoFs.emplace(cell->vertex_dof_index(i, 0), coord);
 		}
 	}
 }
@@ -728,18 +724,6 @@ void tube::run()
 		double	max = 0;
 		int		node_max = 0;
 		for (unsigned int i=0; i<tria.n_vertices(); ++i) {
-			/*double	lastVx;
-			double	nowVx;
-
-		for (auto last : lastVelosity)
-				if (last.first == last.first)
-					lastVx = last.second;
-			
-			for (auto now : nowVelosity)
-				if (now.first == last.first){
-					nowVx = now.second;
-					node = now.first;
-				}*/
 
 			if (fabs(lastVelosity[i] - nowVelosity[i]) > max)
 			{
@@ -749,31 +733,26 @@ void tube::run()
 		}
 	std::cout << max << '\n';	
 		/*сравниваем скорости с истинным решением*/
-//		if (max < EPS && time > 1) {
-		if (time > 9) {
+		if (max < EPS && time > 1) {
 			std::ofstream fout;
 			double	max_error = 0;
-			fout.open("Error_at_x_5.txt");
 
-			for (auto needDots : needStepDoFs) {
-				double	realVelocity;
+				for (auto needDots : needStepDoFs){
 
+					double	realVelocity;
 				//вычисляем истинное решение, зная координаты х и у
 				double	a = 2.0;
 				double	mu = 1.0;
 				realVelocity = 10.0 / (2.0 * mu) * (a * a - needDots.second * needDots.second);
 
-				std::cout << "real velocity (I think) = " << realVelocity << std::endl;
- 
-				std::cout << "founded velocity = " << nowVelosity[needDots.first] << std::endl;
+//				std::cout << "real velocity (I think) = " << realVelocity << std::endl;
+//				std::cout << "founded velocity = " << nowVelosity[needDots.first] << std::endl;
 
-				//записываем в файл координаты и разницу
 				if (max_error < fabs(nowVelosity[needDots.first] - realVelocity))
 					max_error = fabs(nowVelosity[needDots.first] - realVelocity);
 			}
 			
-			fout.close();
-			std::cout << "Error was written. Max error is " << max_error << std::endl;
+			std::cout << "Max error is " << max_error << std::endl;
 			break ;
 		}
 

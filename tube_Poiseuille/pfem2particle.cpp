@@ -613,19 +613,19 @@ void pfem2Solver::correct_particles_velocities()
 		for(auto particleIndex = particle_handler.particles_in_cell_begin(cell); //нумерация частиц в ячейке
 		                                   particleIndex != particle_handler.particles_in_cell_end(cell); ++particleIndex) {
 		
-			(*particleIndex).second->set_velocity_component(0,0);
-			(*particleIndex).second->set_velocity_component(0,1);			
+		//	(*particleIndex).second->set_velocity_component(0,0);
+		//	(*particleIndex).second->set_velocity_component(0,1);			
 
 			for (unsigned int vertex=0; vertex<GeometryInfo<2>::vertices_per_cell; ++vertex){	//вершина для каждой частицы
 				shapeValue = fe.shape_value(vertex, (*particleIndex).second->get_reference_location());	//функция формы для текущей вершины
 
 
 				//для текущей частицы устанавливаем скорость как предыдущая скорость плюс функция формы на изменение скорости в вершине
-				(*particleIndex).second->set_velocity_component((*particleIndex).second->get_velocity_component(0) + shapeValue * ( solutionVx(cell->vertex_dof_index(vertex,0)) /*- old_solutionVx(cell->vertex_dof_index(vertex,0))*/ ), 0);
-				(*particleIndex).second->set_velocity_component((*particleIndex).second->get_velocity_component(1) + shapeValue * ( solutionVy(cell->vertex_dof_index(vertex,0)) /*- old_solutionVy(cell->vertex_dof_index(vertex,0))*/ ), 1);
+			//	(*particleIndex).second->set_velocity_component((*particleIndex).second->get_velocity_component(0) + shapeValue * ( solutionVx(cell->vertex_dof_index(vertex,0)) /*- old_solutionVx(cell->vertex_dof_index(vertex,0))*/ ), 0);
+			//	(*particleIndex).second->set_velocity_component((*particleIndex).second->get_velocity_component(1) + shapeValue * ( solutionVy(cell->vertex_dof_index(vertex,0)) /*- old_solutionVy(cell->vertex_dof_index(vertex,0))*/ ), 1);
 			
-			//	(*particleIndex).second->set_velocity_component((*particleIndex).second->get_velocity_component(0) + shapeValue * ( solutionVx(cell->vertex_dof_index(vertex,0)) - old_solutionVx(cell->vertex_dof_index(vertex,0)) ), 0);
-			//	(*particleIndex).second->set_velocity_component((*particleIndex).second->get_velocity_component(1) + shapeValue * ( solutionVy(cell->vertex_dof_index(vertex,0)) - old_solutionVy(cell->vertex_dof_index(vertex,0)) ), 1);
+				(*particleIndex).second->set_velocity_component((*particleIndex).second->get_velocity_component(0) + shapeValue * ( solutionVx(cell->vertex_dof_index(vertex,0)) - old_solutionVx(cell->vertex_dof_index(vertex,0)) ), 0);
+				(*particleIndex).second->set_velocity_component((*particleIndex).second->get_velocity_component(1) + shapeValue * ( solutionVy(cell->vertex_dof_index(vertex,0)) - old_solutionVy(cell->vertex_dof_index(vertex,0)) ), 1);
 
 			}//vertex
 		}//particle
@@ -821,7 +821,6 @@ void pfem2Solver::distribute_particle_velocities_to_grid() //перенос ск
 				double	d = sqrt(pow(mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(0)-cell->center()(0),2)+	
 					pow(mapping.transform_unit_to_real_cell(cell, (*particleIndex).second->get_reference_location())(1)-cell->center()(1),2));
 				double	thetta = exp(-pow(d/h,2));
-//				double	thetta = pow(1 - d / h, 4)*(4*d/h+1);
 //				double	thetta = 1.0 / (pow(d, 2)+0.001);//	eps=0.001
 				f.add((*particleIndex).second->get_velocity_component(0) * thetta, b);//f для каждой частицы по х
 				fy.add((*particleIndex).second->get_velocity_component(1) * thetta, b);//f для каждой частицы по у
